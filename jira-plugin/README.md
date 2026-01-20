@@ -56,7 +56,7 @@ jira-plugin/
 
 3. Run the plugin:
    ```bash
-   ./jira-plugin
+   go run .
    ```
 
 ## Configuration
@@ -68,11 +68,101 @@ The plugin requires the following environment variables (set in `env.plugin`):
 - `SOREN_AUTH_KEY` - Authentication key for event logging
 - `SOREN_EVENT_CHANNEL` - NATS channel for events
 
+### Set up `env.plugin`
+
+`env.plugin` is ignored by git. Create it manually with values for your environment:
+
+```dotenv
+AGENT_URI=127.0.0.1:5222
+PLUGIN_ID=bin.*.<plugin-uuid>
+AGENT_CRED=<nats_creds_string>
+SOREN_AUTH_KEY=<auth_key>
+SOREN_EVENT_CHANNEL=<event_channel>
+```
+
+Notes:
+- `PLUGIN_ID` must start with `bin.*.` for internal plugins.
+- The plugin loads this file at startup: `godotenv.Load("./env.plugin")`.
+
+### Getting env values
+
+You can fetch the plugin credentials from the platform API:
+
+```
+GET {{PluginBaseUrl}}/platform/node/cred?page=1&per_page=10&search=
+```
+
+Example (replace base URL and token/header as needed):
+
+```bash
+curl -H "Authorization: Bearer <token>" \
+  "{{PluginBaseUrl}}/platform/node/cred?page=1&per_page=10&search="
+```
+
+Use the response fields to populate `env.plugin`:
+- `AGENT_URI`
+- `PLUGIN_ID`
+- `AGENT_CRED`
+- `SOREN_AUTH_KEY`
+- `SOREN_EVENT_CHANNEL`
+
+### Verify the plugin is running
+
+You can confirm the plugin is up and registered by hitting the proto endpoints:
+
+```
+GET {{PluginBaseUrl}}/plugin/proto/6d9bcd10-7717-41d8-5a0d-a8adbe24ce2c/@intro
+GET {{PluginBaseUrl}}/plugin/proto/6d9bcd10-7717-41d8-5a0d-a8adbe24ce2c/@actions
+```
+
+### Example: projects.list response
+
+![projects.list response](./docs/project-list-action.png)
+
 ## Onboarding
 
 Users must complete onboarding by providing:
 - Jira Instance URL
 - Email address
-- API Token
+- API Token (Cloud: https://id.atlassian.com/manage-profile/security/api-tokens, self-hosted: https://jira.sorenhq.com/secure/ViewProfile.jspa?selectedTab=com.atlassian.pats.pats-plugin:jira-user-personal-access-tokens)
 
 Credentials are stored per space (entityId) for multi-tenant support.
+
+## Sample Requests (HTTP)
+
+You can call the plugin directly via the proto endpoint:
+
+```
+GET {{PluginBaseUrl}}/plugin/proto/6d9bcd10-7717-41d8-5a0d-a8adbe24ce2c/projects.list
+```
+
+Issue actions use `POST` with a JSON body under `body`:
+
+```
+POST {{PluginBaseUrl}}/plugin/proto/6d9bcd10-7717-41d8-5a0d-a8adbe24ce2c/issues.create
+{
+  "body": {
+    "projectKey": "PROJ",
+    "issueType": "Task",
+    "summary": "Test from HTTP",
+    "description": "Created via request",
+    "additionalFields": {
+      "dueDate": "2024-12-31"
+    }
+  }
+}
+```
+
+Note: `dueDate` is required and must be provided inside `additionalFields`.
+
+Example: add a comment:
+
+```
+POST {{PluginBaseUrl}}/plugin/proto/6d9bcd10-7717-41d8-5a0d-a8adbe24ce2c/issues.comment
+{
+  "body": {
+    "issueKey": "COM-69",
+    "commentBody": "This is a comment"
+  }
+}
+```
