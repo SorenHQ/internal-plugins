@@ -1,0 +1,3 @@
+[submodule "go-plugin-sdk"]
+	path = go-plugin-sdk
+	url = git@github.com:SorenHQ/go-plugin-sdk.git
