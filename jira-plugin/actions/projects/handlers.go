@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/bytedance/sonic"
+	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
+	sdkv2 "github.com/sorenhq/go-plugin-sdk/gosdk"
 	sdkv2Models "github.com/sorenhq/go-plugin-sdk/gosdk/models"
 
 	"github.com/sorenhq/jira-plugin/credentials"
@@ -27,11 +30,10 @@ func handleActionWithCredentialsCheckSync(msg *nats.Msg, actionName string, acti
 		err := sonic.Unmarshal(msg.Data, &requestData)
 		if err != nil {
 			log.Printf("Failed to unmarshal action request: %v", err)
-			response, _ := sonic.Marshal(map[string]any{
-				"error":   "Invalid request data",
+			sdkv2.RejectWithBody(msg, map[string]any{
+				"error":   "invalid_request",
 				"message": "Failed to parse request",
 			})
-			msg.Respond(response)
 			return
 		}
 		// Use the body from requestData if available, otherwise use empty map
@@ -53,13 +55,12 @@ func handleActionWithCredentialsCheckSync(msg *nats.Msg, actionName string, acti
 		}
 
 		log.Printf("Action %s rejected for space '%s': %s", actionName, spaceID, errorMsg)
-		response, _ := sonic.Marshal(map[string]any{
+		sdkv2.RejectWithBody(msg, map[string]any{
 			"error":   "credentials_not_configured",
 			"message": errorMsg,
 			"action":  actionName,
 			"spaceId": spaceID,
 		})
-		msg.Respond(response)
 		return
 	}
 
@@ -67,27 +68,43 @@ func handleActionWithCredentialsCheckSync(msg *nats.Msg, actionName string, acti
 	creds, err := credsStorage.GetCredentials(spaceID)
 	if err != nil {
 		log.Printf("Failed to get credentials: %v", err)
-		response, _ := sonic.Marshal(map[string]any{
+		sdkv2.RejectWithBody(msg, map[string]any{
 			"error":   "credentials_error",
 			"message": fmt.Sprintf("Failed to retrieve credentials: %v", err),
 		})
-		msg.Respond(response)
 		return
 	}
 
-	// Execute the action and get result
-	result := actionFunc(creds, body)
-
-	// Respond directly with the result
-	response, err := sonic.Marshal(result)
+	// 1. Handshake
+	jobID := uuid.New().String()
+	initResponse := map[string]any{
+		"jobId":    jobID,
+		"progress": 0,
+	}
+	if plugin := sdkv2.GetPlugin(); plugin != nil {
+		plugin.StoreEntityIdForJob(jobID, spaceID)
+	}
+	response, err := sonic.Marshal(initResponse)
 	if err != nil {
 		log.Printf("Failed to marshal response: %v", err)
-		response, _ = sonic.Marshal(map[string]any{
+		sdkv2.RejectWithBody(msg, map[string]any{
 			"error":   "internal_error",
 			"message": "Failed to serialize response",
 		})
+		return
 	}
 	msg.Respond(response)
+
+	// 2. WAIT (Crucial for NATS state synchronization)
+	time.Sleep(1 * time.Second)
+
+	// 3. COMPLETE
+	result := actionFunc(creds, body)
+	if plugin := sdkv2.GetPlugin(); plugin != nil {
+		plugin.Done(jobID, result)
+	} else {
+		log.Printf("Failed to publish result: plugin instance not found")
+	}
 }
 
 // extractSpaceIdFromSubject extracts the entityId (spaceId) from NATS message subject
@@ -101,5 +118,20 @@ func extractSpaceIdFromSubject(subject string) string {
 		}
 	}
 	// If pattern doesn't match, return empty string (will use default)
+	return ""
+}
+
+// extractPluginIDFromSubject extracts the pluginId from NATS message subject
+// Subject pattern: soren.v2.bin.{entityId}.{pluginId}.{path} or soren.v2.{pluginId}.{path}
+func extractPluginIDFromSubject(subject string) string {
+	parts := strings.Split(subject, ".")
+	for i, part := range parts {
+		if part == "bin" && i+2 < len(parts) {
+			return parts[i+2]
+		}
+	}
+	if len(parts) >= 3 && parts[0] == "soren" && parts[1] == "v2" {
+		return parts[2]
+	}
 	return ""
 }
