@@ -10,7 +10,7 @@ require (
 )
 
 // Use local SDK for development
-//replace github.com/sorenhq/go-plugin-sdk => ../go-plugin-sdk
+replace github.com/sorenhq/go-plugin-sdk => ../go-plugin-sdk
 
 require (
 	github.com/bytedance/gopkg v0.1.3 // indirect

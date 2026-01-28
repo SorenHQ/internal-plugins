@@ -1,19 +1,16 @@
 package main
 
 import (
-	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
 
 	"github.com/joho/godotenv"
-	"github.com/nats-io/nats.go"
 	sdkv2 "github.com/sorenhq/go-plugin-sdk/gosdk"
 	models "github.com/sorenhq/go-plugin-sdk/gosdk/models"
 
 	"github.com/sorenhq/jira-plugin/actions/issues"
 	"github.com/sorenhq/jira-plugin/actions/projects"
-	"github.com/sorenhq/jira-plugin/credentials"
 )
 
 var PluginInstance *sdkv2.Plugin
@@ -48,11 +45,9 @@ func main() {
 
 	// Set up plugin intro with onboarding requirements
 	plugin.SetIntro(models.PluginIntro{
-		Name:       "Jira Plugin",
-		Version:    "1.0.0",
-		Author:     "Soren Team",
-		Summary:    "Jira integration for managing projects and issues",
-		IconBase64: loadIconBase64(),
+		Name:    "Jira Plugin",
+		Version: "1.0.0",
+		Author:  "Soren Team",
 		Requirements: &models.Requirements{
 			ReplyTo: "onboarding",
 			Jsonui: map[string]any{
@@ -96,21 +91,6 @@ func main() {
 			},
 		},
 	}, onboardingHandler)
-	plugin.SetIntroResponder(func(msg *nats.Msg) any {
-		spaceID := extractSpaceIdFromSubject(msg.Subject)
-		credsStorage := credentials.GetCredentialsStorage()
-		hasCreds := credsStorage.HasCredentials(spaceID)
-
-		intro := plugin.Intro
-		meta := map[string]any{}
-		for key, value := range intro.Meta {
-			meta[key] = value
-		}
-		meta["credentialsConfigured"] = hasCreds
-		meta["spaceId"] = spaceID
-		intro.Meta = meta
-		return intro
-	})
 
 	// Collect all actions from different modules
 	var allActions []models.Action
@@ -121,12 +101,4 @@ func main() {
 	plugin.AddActions(allActions)
 
 	plugin.Start()
-}
-
-func loadIconBase64() string {
-	data, err := os.ReadFile("./docs/jira_icon.png")
-	if err != nil || len(data) == 0 {
-		return ""
-	}
-	return base64.StdEncoding.EncodeToString(data)
 }
