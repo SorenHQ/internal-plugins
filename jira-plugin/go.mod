@@ -6,11 +6,11 @@ require (
 	github.com/bytedance/sonic v1.14.2
 	github.com/joho/godotenv v1.5.1
 	github.com/nats-io/nats.go v1.48.0
-	github.com/sorenhq/go-plugin-sdk v0.2.0
+	github.com/sorenhq/go-plugin-sdk v0.2.3
 )
 
 // Use local SDK for development
-replace github.com/sorenhq/go-plugin-sdk => ../go-plugin-sdk
+//replace github.com/sorenhq/go-plugin-sdk => ../go-plugin-sdk
 
 require (
 	github.com/bytedance/gopkg v0.1.3 // indirect
