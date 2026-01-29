@@ -49,15 +49,35 @@ jira-plugin/
    go mod tidy
    ```
 
-2. Build the plugin:
-   ```bash
-   go build -o jira-plugin .
-   ```
-
-3. Run the plugin:
+2. Run the plugin:
    ```bash
    go run .
    ```
+
+### Example output: projects.list
+
+```
+2026/01/28 22:32:51 SOREN_AUTH_KEY is set (length: 246)
+2026/01/28 22:32:51 SOREN_EVENT_CHANNEL is set: soren.plugin.event.bin.5b37cdee-0fe9-4d1b-407e-b4b44cf05f30
+2026/01/28 22:32:51 Form Builder Service : soren.v2.bin.*.5b37cdee-0fe9-4d1b-407e-b4b44cf05f30.projects.list.@form
+2026/01/28 22:32:51 Subscribed Action : soren.cpu.bin.*.5b37cdee-0fe9-4d1b-407e-b4b44cf05f30.projects.list
+2026/01/28 22:32:51 Form Builder Service : soren.v2.bin.*.5b37cdee-0fe9-4d1b-407e-b4b44cf05f30.issues.create.@form
+2026/01/28 22:32:51 Subscribed Action : soren.cpu.bin.*.5b37cdee-0fe9-4d1b-407e-b4b44cf05f30.issues.create
+2026/01/28 22:32:51 Form Builder Service : soren.v2.bin.*.5b37cdee-0fe9-4d1b-407e-b4b44cf05f30.issues.delete.@form
+2026/01/28 22:32:51 Subscribed Action : soren.cpu.bin.*.5b37cdee-0fe9-4d1b-407e-b4b44cf05f30.issues.delete
+2026/01/28 22:32:51 Form Builder Service : soren.v2.bin.*.5b37cdee-0fe9-4d1b-407e-b4b44cf05f30.issues.comment.@form
+2026/01/28 22:32:51 Subscribed Action : soren.cpu.bin.*.5b37cdee-0fe9-4d1b-407e-b4b44cf05f30.issues.comment
+{"status":"Accepted"}
+2026/01/28 22:33:56 Action projects.list called for space '2eb52c80-7427-46f5-52ad-fca0a4f0ccfd' (extracted from subject: soren.cpu.bin.2eb52c80-7427-46f5-52ad-fca0a4f0ccfd.5b37cdee-0fe9-4d1b-407e-b4b44cf05f30.projects.list)
+2026/01/28 22:33:56 Message data length: 28 bytes, content: {"_registry":null,"body":{}}
+2026/01/28 22:33:56 Making Jira API request: GET http://jira.sorenhq.com/rest/api/2/project
+2026/01/28 22:33:57 Jira API response status: 200, body length: 6390 bytes
+2026/01/28 22:33:57 Successfully parsed 11 projects from Jira API
+2026/01/28 22:33:57 Successfully retrieved 11 projects from Jira
+2026/01/28 22:33:57 First project: map[archived:false avatarUrls:map[16x16:https://jira.sorenhq.com/secure/projectavatar?size=xsmall&avatarId=10324 24x24:https://jira.sorenhq.com/secure/projectavatar?size=small&avatarId=10324 32x32:https://jira.sorenhq.com/secure/projectavatar?size=medium&avatarId=10324 48x48:https://jira.sorenhq.com/secure/projectavatar?avatarId=10324] expand:description,lead,createdAt,createdBy,lastUpdatedAt,lastUpdatedBy,url,projectKeys id:10008 key:COM name:Compliance projectTypeKey:software self:https://jira.sorenhq.com/rest/api/2/project/10008]
+2026/01/28 22:33:57 progress command subject: soren.cpu.bin.2eb52c80-7427-46f5-52ad-fca0a4f0ccfd.5b37cdee-0fe9-4d1b-407e-b4b44cf05f30.10e4297d-4325-410b-7343-37b4e9aa3b6a.progress
+result of soren.cpu.bin.2eb52c80-7427-46f5-52ad-fca0a4f0ccfd.5b37cdee-0fe9-4d1b-407e-b4b44cf05f30.10e4297d-4325-410b-7343-37b4e9aa3b6a.progress  :  {"msg":"ack","result":"done"}
+```
 
 ## Configuration
 
