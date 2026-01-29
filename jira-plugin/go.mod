@@ -9,9 +9,6 @@ require (
 	github.com/sorenhq/go-plugin-sdk v0.2.3
 )
 
-// Use local SDK for development
-replace github.com/sorenhq/go-plugin-sdk => ../go-plugin-sdk
-
 require (
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic/loader v0.4.0 // indirect
