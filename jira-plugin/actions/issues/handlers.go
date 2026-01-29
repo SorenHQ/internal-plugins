@@ -7,6 +7,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/nats-io/nats.go"
+	sdkv2 "github.com/sorenhq/go-plugin-sdk/gosdk"
 	sdkv2Models "github.com/sorenhq/go-plugin-sdk/gosdk/models"
 
 	"github.com/sorenhq/jira-plugin/credentials"
@@ -27,11 +28,10 @@ func handleActionWithCredentialsCheckSync(msg *nats.Msg, actionName string, acti
 		err := sonic.Unmarshal(msg.Data, &requestData)
 		if err != nil {
 			log.Printf("Failed to unmarshal action request: %v", err)
-			response, _ := sonic.Marshal(map[string]any{
-				"error":   "Invalid request data",
+			sdkv2.RejectWithBody(msg, map[string]any{
+				"error":   "invalid_request",
 				"message": "Failed to parse request",
 			})
-			msg.Respond(response)
 			return
 		}
 		// Use the body from requestData if available, otherwise use empty map
@@ -53,13 +53,12 @@ func handleActionWithCredentialsCheckSync(msg *nats.Msg, actionName string, acti
 		}
 
 		log.Printf("Action %s rejected for space '%s': %s", actionName, spaceID, errorMsg)
-		response, _ := sonic.Marshal(map[string]any{
+		sdkv2.RejectWithBody(msg, map[string]any{
 			"error":   "credentials_not_configured",
 			"message": errorMsg,
 			"action":  actionName,
 			"spaceId": spaceID,
 		})
-		msg.Respond(response)
 		return
 	}
 
@@ -67,27 +66,30 @@ func handleActionWithCredentialsCheckSync(msg *nats.Msg, actionName string, acti
 	creds, err := credsStorage.GetCredentials(spaceID)
 	if err != nil {
 		log.Printf("Failed to get credentials: %v", err)
-		response, _ := sonic.Marshal(map[string]any{
+		sdkv2.RejectWithBody(msg, map[string]any{
 			"error":   "credentials_error",
 			"message": fmt.Sprintf("Failed to retrieve credentials: %v", err),
 		})
-		msg.Respond(response)
 		return
 	}
 
-	// Execute the action and get result
-	result := actionFunc(creds, body)
-
-	// Respond directly with the result
-	response, err := sonic.Marshal(result)
-	if err != nil {
-		log.Printf("Failed to marshal response: %v", err)
-		response, _ = sonic.Marshal(map[string]any{
-			"error":   "internal_error",
-			"message": "Failed to serialize response",
+	// Handshake via SDK (stores entityId and responds)
+	jobID := sdkv2.Accept(msg)
+	if jobID == "" {
+		sdkv2.RejectWithBody(msg, map[string]any{
+			"error":   "job_creation_failed",
+			"message": "Failed to create job",
 		})
+		return
 	}
-	msg.Respond(response)
+
+	// Execute and complete
+	result := actionFunc(creds, body)
+	if plugin := sdkv2.GetPlugin(); plugin != nil {
+		plugin.Done(jobID, result)
+	} else {
+		log.Printf("Failed to publish result: plugin instance not found")
+	}
 }
 
 // extractSpaceIdFromSubject extracts the entityId (spaceId) from NATS message subject

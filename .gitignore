@@ -1,2 +1,4 @@
 jira-plugin/env.plugin
 jira-plugin/jira_credentials.json
+.DS_Store
+__debug*

@@ -16,7 +16,7 @@ import (
 var PluginInstance *sdkv2.Plugin
 
 func main() {
-	err := godotenv.Load("./env.plugin")
+	err := godotenv.Overload("./env.plugin")
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -45,7 +45,7 @@ func main() {
 
 	// Set up plugin intro with onboarding requirements
 	plugin.SetIntro(models.PluginIntro{
-		Name:    "Jira Integration Plugin",
+		Name:    "Jira Plugin",
 		Version: "1.0.0",
 		Author:  "Soren Team",
 		Requirements: &models.Requirements{
