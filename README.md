@@ -1,8 +1,7 @@
 # Internal Plugins
 
-This repository contains internal Soren plugins. It includes the shared Go SDK
-as a submodule and one sample plugin (`jira-plugin`) you can use as a starting
-point for development and testing.
+This repository contains internal Soren plugins and a sample plugin
+(`jira-plugin`) you can use as a starting point for development and testing.
 
 ## Plugins and Actions
 
@@ -11,16 +10,6 @@ point for development and testing.
 | Jira | Sample | `projects.list`, `issues.create`, `issues.delete`, `issues.comment` | `issues.update`, `issues.transition`, `issues.get`, `projects.get` |
 | Google Calendar | Planned | — | `calendars.list`, `events.list`, `events.create`, `events.update`, `events.delete` |
 | Slack | Planned | — | `channels.list`, `messages.post`, `messages.update`, `messages.delete`, `users.list` |
-
-## Getting Started
-
-1. Initialize submodules:
-   ```bash
-   git submodule update --init --recursive
-   ```
-
-2. Explore the sample plugin:
-   - See `jira-plugin/README.md` for setup, env configuration, and request examples.
 
 ## Notes
 
