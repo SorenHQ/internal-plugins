@@ -6,7 +6,7 @@ require (
 	github.com/bytedance/sonic v1.14.2
 	github.com/joho/godotenv v1.5.1
 	github.com/nats-io/nats.go v1.48.0
-	github.com/sorenhq/go-plugin-sdk v0.2.3
+	github.com/sorenhq/go-plugin-sdk v0.2.9
 )
 
 require (

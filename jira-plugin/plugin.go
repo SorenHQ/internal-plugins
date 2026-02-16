@@ -99,6 +99,7 @@ func main() {
 
 	// Add all actions to the plugin
 	plugin.AddActions(allActions)
+	plugin.AddMetaFunction("_projects.list", projects.ListProjectsMetaHandler)
 
 	plugin.Start()
 }

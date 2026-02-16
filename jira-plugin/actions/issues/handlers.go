@@ -28,7 +28,7 @@ func handleActionWithCredentialsCheckSync(msg *nats.Msg, actionName string, acti
 		err := sonic.Unmarshal(msg.Data, &requestData)
 		if err != nil {
 			log.Printf("Failed to unmarshal action request: %v", err)
-			sdkv2.RejectWithBody(msg, map[string]any{
+			sdkv2.RejectReq(msg, map[string]any{
 				"error":   "invalid_request",
 				"message": "Failed to parse request",
 			})
@@ -53,7 +53,7 @@ func handleActionWithCredentialsCheckSync(msg *nats.Msg, actionName string, acti
 		}
 
 		log.Printf("Action %s rejected for space '%s': %s", actionName, spaceID, errorMsg)
-		sdkv2.RejectWithBody(msg, map[string]any{
+		sdkv2.RejectReq(msg, map[string]any{
 			"error":   "credentials_not_configured",
 			"message": errorMsg,
 			"action":  actionName,
@@ -66,7 +66,7 @@ func handleActionWithCredentialsCheckSync(msg *nats.Msg, actionName string, acti
 	creds, err := credsStorage.GetCredentials(spaceID)
 	if err != nil {
 		log.Printf("Failed to get credentials: %v", err)
-		sdkv2.RejectWithBody(msg, map[string]any{
+		sdkv2.RejectReq(msg, map[string]any{
 			"error":   "credentials_error",
 			"message": fmt.Sprintf("Failed to retrieve credentials: %v", err),
 		})
@@ -74,9 +74,9 @@ func handleActionWithCredentialsCheckSync(msg *nats.Msg, actionName string, acti
 	}
 
 	// Handshake via SDK (stores entityId and responds)
-	jobID := sdkv2.Accept(msg)
+	jobID := sdkv2.AcceptReq(msg)
 	if jobID == "" {
-		sdkv2.RejectWithBody(msg, map[string]any{
+		sdkv2.RejectReq(msg, map[string]any{
 			"error":   "job_creation_failed",
 			"message": "Failed to create job",
 		})
