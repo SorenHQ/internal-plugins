@@ -14,6 +14,33 @@ import (
 	"github.com/sorenhq/jira-plugin/credentials"
 )
 
+type metaRequest struct {
+	FormData map[string]any `json:"formData"`
+	Form     *struct {
+		Jsonui     map[string]any `json:"jsonui"`
+		Jsonschema map[string]any `json:"jsonschema"`
+	} `json:"form"`
+}
+
+// metaResponseSuccess returns formData and form encapsulated under top-level "data". Shape: { "data": { "formData": {...}, "form": {...} }, "error": null }.
+func metaResponseSuccess(formData map[string]any, form map[string]any) map[string]any {
+	if formData == nil {
+		formData = map[string]any{}
+	}
+	return map[string]any{
+		"data": map[string]any{
+			"formData": formData,
+			"form":     form,
+		},
+		"error": nil,
+	}
+}
+
+// metaResponseError returns the standard error shape for meta handlers (for frontend handling). error is always a string.
+func metaResponseError(msg string) map[string]any {
+	return map[string]any{"data": nil, "formData": nil, "form": nil, "error": msg}
+}
+
 // handleActionWithCredentialsCheckSync is a helper function for synchronous actions that respond directly
 func handleActionWithCredentialsCheckSync(msg *nats.Msg, actionName string, actionFunc func(*credentials.JiraCredentials, map[string]any) map[string]any) {
 	// Extract spaceId from the NATS message subject
@@ -107,46 +134,167 @@ func extractSpaceIdFromSubject(subject string) string {
 	return ""
 }
 
-// ListProjectsMetaHandler responds with projects list for meta functions.
 func ListProjectsMetaHandler(msg *nats.Msg) {
+	var req metaRequest
+	if len(msg.Data) > 0 {
+		if err := sonic.Unmarshal(msg.Data, &req); err != nil {
+			log.Printf("_projects.list: failed to unmarshal request: %v", err)
+			resp, _ := sonic.Marshal(metaResponseError("invalid_request"))
+			msg.Respond(resp)
+			return
+		}
+	}
+
 	spaceID := extractSpaceIdFromSubject(msg.Subject)
 	credsStorage := credentials.GetCredentialsStorage()
 	if !credsStorage.HasCredentials(spaceID) {
-		response, _ := sonic.Marshal(map[string]any{
-			"error":   "credentials_not_configured",
-			"message": "Jira credentials not configured. Please complete onboarding.",
-			"spaceId": spaceID,
-		})
-		msg.Respond(response)
+		resp, _ := sonic.Marshal(metaResponseError("Jira credentials not configured. Please complete onboarding."))
+		msg.Respond(resp)
 		return
 	}
 	creds, err := credsStorage.GetCredentials(spaceID)
 	if err != nil {
-		response, _ := sonic.Marshal(map[string]any{
-			"error":   "credentials_error",
-			"message": fmt.Sprintf("Failed to retrieve credentials: %v", err),
-		})
-		msg.Respond(response)
+		resp, _ := sonic.Marshal(metaResponseError(fmt.Sprintf("Failed to retrieve credentials: %v", err)))
+		msg.Respond(resp)
 		return
 	}
 
 	jiraClient := client.NewJiraClient(creds)
 	projects, err := jiraClient.ListProjects()
 	if err != nil {
-		response, _ := sonic.Marshal(map[string]any{
-			"error":   "jira_api_error",
-			"message": fmt.Sprintf("Failed to fetch projects: %v", err),
-		})
-		msg.Respond(response)
+		resp, _ := sonic.Marshal(metaResponseError(fmt.Sprintf("Failed to fetch projects: %v", err)))
+		msg.Respond(resp)
 		return
 	}
 
-	response, err := sonic.Marshal(projects)
-	if err != nil {
-		response, _ = sonic.Marshal(map[string]any{
-			"error":   "internal_error",
-			"message": "Failed to serialize response",
-		})
+	keys := make([]string, 0, len(projects))
+	for _, p := range projects {
+		if k, _ := p["key"].(string); k != "" {
+			keys = append(keys, k)
+		}
 	}
-	msg.Respond(response)
+
+	form := req.Form
+	if form == nil || form.Jsonschema == nil {
+		resp, _ := sonic.Marshal(metaResponseError("missing form in request"))
+		msg.Respond(resp)
+		return
+	}
+
+	jsonschema := make(map[string]any)
+	for k, v := range form.Jsonschema {
+		jsonschema[k] = v
+	}
+	props, _ := jsonschema["properties"].(map[string]any)
+	if props == nil {
+		props = make(map[string]any)
+		jsonschema["properties"] = props
+	} else {
+		props = copyMap(props)
+		jsonschema["properties"] = props
+	}
+	projectKeyProp, _ := props["projectKey"].(map[string]any)
+	if projectKeyProp == nil {
+		projectKeyProp = make(map[string]any)
+	} else {
+		projectKeyProp = copyMap(projectKeyProp)
+	}
+	projectKeyProp["enum"] = keys
+	props["projectKey"] = projectKeyProp
+
+	updatedForm := map[string]any{
+		"jsonui":     form.Jsonui,
+		"jsonschema": jsonschema,
+	}
+	out := metaResponseSuccess(req.FormData, updatedForm)
+	resp, _ := sonic.Marshal(out)
+	msg.Respond(resp)
+}
+
+func copyMap(m map[string]any) map[string]any {
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
+// ListIssueTypesMetaHandler handles POST with { data, Form }. issueType has dependsOn: ["projectKey"]; we read data.projectKey (set by frontend). Returns same format as request with only Form updated.
+func ListIssueTypesMetaHandler(msg *nats.Msg) {
+	var req metaRequest
+	if len(msg.Data) > 0 {
+		if err := sonic.Unmarshal(msg.Data, &req); err != nil {
+			log.Printf("_issueTypes.list: failed to unmarshal request: %v", err)
+			resp, _ := sonic.Marshal(metaResponseError("invalid_request"))
+			msg.Respond(resp)
+			return
+		}
+	}
+
+	// dependsOn: frontend sends current form values in formData; projectKey should already be set
+	projectKey, _ := req.FormData["projectKey"].(string)
+	if projectKey == "" {
+		resp, _ := sonic.Marshal(metaResponseError("projectKey is required (dependsOn); ensure it is set in formData before calling _issueTypes.list"))
+		msg.Respond(resp)
+		return
+	}
+
+	spaceID := extractSpaceIdFromSubject(msg.Subject)
+	credsStorage := credentials.GetCredentialsStorage()
+	if !credsStorage.HasCredentials(spaceID) {
+		resp, _ := sonic.Marshal(metaResponseError("Jira credentials not configured."))
+		msg.Respond(resp)
+		return
+	}
+	creds, err := credsStorage.GetCredentials(spaceID)
+	if err != nil {
+		resp, _ := sonic.Marshal(metaResponseError(fmt.Sprintf("Failed to retrieve credentials: %v", err)))
+		msg.Respond(resp)
+		return
+	}
+
+	jiraClient := client.NewJiraClient(creds)
+	names, err := jiraClient.GetIssueTypes(projectKey)
+	if err != nil {
+		log.Printf("GetIssueTypes failed: %v", err)
+		resp, _ := sonic.Marshal(metaResponseError(fmt.Sprintf("Failed to fetch issue types: %v", err)))
+		msg.Respond(resp)
+		return
+	}
+
+	form := req.Form
+	if form == nil || form.Jsonschema == nil {
+		resp, _ := sonic.Marshal(metaResponseError("missing form in request"))
+		msg.Respond(resp)
+		return
+	}
+
+	jsonschema := make(map[string]any)
+	for k, v := range form.Jsonschema {
+		jsonschema[k] = v
+	}
+	props, _ := jsonschema["properties"].(map[string]any)
+	if props == nil {
+		props = make(map[string]any)
+		jsonschema["properties"] = props
+	} else {
+		props = copyMap(props)
+		jsonschema["properties"] = props
+	}
+	issueTypeProp, _ := props["issueType"].(map[string]any)
+	if issueTypeProp == nil {
+		issueTypeProp = make(map[string]any)
+	} else {
+		issueTypeProp = copyMap(issueTypeProp)
+	}
+	issueTypeProp["enum"] = names
+	props["issueType"] = issueTypeProp
+
+	updatedForm := map[string]any{
+		"jsonui":     form.Jsonui,
+		"jsonschema": jsonschema,
+	}
+	out := metaResponseSuccess(req.FormData, updatedForm)
+	resp, _ := sonic.Marshal(out)
+	msg.Respond(resp)
 }

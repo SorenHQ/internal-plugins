@@ -173,7 +173,7 @@ POST {{PluginBaseUrl}}/plugin/proto/6d9bcd10-7717-41d8-5a0d-a8adbe24ce2c/issues.
 }
 ```
 
-Note: `dueDate` is required and must be provided inside `additionalFields`.
+Note: Use Jira field ID `duedate` (lowercase) in `additionalFields` for Due Date; some projects require it.
 
 Example: add a comment:
 
@@ -186,3 +186,70 @@ POST {{PluginBaseUrl}}/plugin/proto/6d9bcd10-7717-41d8-5a0d-a8adbe24ce2c/issues.
   }
 }
 ```
+
+## Meta API (dynamic enums) — for frontend
+
+Meta endpoints are called via **POST** with a body. The plugin returns **the same format as the request**, with only the form updated (enum injected).
+
+### Request body (both meta endpoints)
+
+```json
+{
+  "formData": { ... },
+  "form": {
+    "jsonui": { ... },
+    "jsonschema": { ... }
+  }
+}
+```
+
+- **formData**: Current form/context. For fields with `dependsOn` (e.g. `issueType` dependsOn `projectKey`), the frontend must set those values in `formData` before calling the meta (e.g. `formData.projectKey`).
+- **form**: The action form (jsonui + jsonschema) to update.
+
+### Success response
+
+Payload is under top-level `data`; only `form.jsonschema` is changed (enum added for the requested field):
+
+```json
+{
+  "data": {
+    "formData": { ... },
+    "form": {
+      "jsonui": { ... },
+      "jsonschema": { ... }
+    }
+  },
+  "error": null
+}
+```
+
+### Error response (all meta errors)
+
+Same shape for every error; frontend should check `error !== null`. **`error`** is always a **string** (human-readable message or code):
+
+```json
+{
+  "data": null,
+  "formData": null,
+  "form": null,
+  "error": "Jira credentials not configured. Please complete onboarding."
+}
+```
+
+### Error cases (for frontend handling)
+
+| Condition | `error` (string) |
+|-----------|-------------------|
+| Request body invalid / not JSON | `"invalid_request"` |
+| Missing or null `form` in request | `"missing form in request"` |
+| Jira credentials not configured | `"Jira credentials not configured. Please complete onboarding."` or `"Jira credentials not configured."` |
+| Failed to load credentials | `"Failed to retrieve credentials: ..."` |
+| Jira API error (projects list) | `"Failed to fetch projects: ..."` |
+| **(_issueTypes.list only)** `formData.projectKey` missing or empty | `"projectKey is required (dependsOn); ensure it is set in formData before calling _issueTypes.list"` |
+| Jira API error (issue types) | `"Failed to fetch issue types: ..."` |
+| Internal serialization failure | `"internal_error"` |
+
+### Endpoints
+
+- **\_projects.list** — Injects `form.jsonschema.properties.projectKey.enum` with list of project keys.
+- **\_issueTypes.list** — Reads `formData.projectKey` (must be set by frontend); injects `form.jsonschema.properties.issueType.enum` with issue type names for that project.

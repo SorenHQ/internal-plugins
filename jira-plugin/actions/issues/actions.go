@@ -53,13 +53,21 @@ func GetActions() []sdkv2Models.Action {
 						"projectKey": map[string]any{
 							"type":        "string",
 							"title":       "Project Key",
-							"description": "The project key (e.g., PROJ)",
+							"description": "the project key (e.g. PROJ)",
+							"x-dynamicEnum": map[string]any{
+								"method": "_projects.list",
+								"title":  "Get Project List",
+							},
 						},
 						"issueType": map[string]any{
 							"type":        "string",
 							"title":       "Issue Type",
 							"description": "Type of issue (e.g., Task, Bug, Story)",
-							"enum":        []string{"Task", "Bug", "Story", "Epic"},
+							"x-dynamicEnum": map[string]any{
+								"method":     "_issueTypes.list",
+								"title":      "Get Issue Types",
+								"dependsOn":  []string{"projectKey"},
+							},
 						},
 						"summary": map[string]any{
 							"type":        "string",

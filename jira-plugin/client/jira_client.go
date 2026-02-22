@@ -97,6 +97,42 @@ func (jc *JiraClient) ListProjects() ([]map[string]interface{}, error) {
 	return projects, nil
 }
 
+// GetIssueTypes returns issue type names for a project (e.g. Task, Bug, Story).
+// Response is paginated: { "maxResults", "startAt", "total", "values": [ { "name": "Bug", ... }, ... ] }.
+func (jc *JiraClient) GetIssueTypes(projectKey string) ([]string, error) {
+	if projectKey == "" {
+		return nil, fmt.Errorf("projectKey is required")
+	}
+	path := fmt.Sprintf("/rest/api/2/issue/createmeta/%s/issuetypes", projectKey)
+	resp, err := jc.makeRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Jira API error (status %d): %s", resp.StatusCode, string(bodyBytes))
+	}
+	var page struct {
+		Values []struct {
+			Name string `json:"name"`
+		} `json:"values"`
+	}
+	if err := sonic.Unmarshal(bodyBytes, &page); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal issuetypes: %w", err)
+	}
+	var names []string
+	for _, it := range page.Values {
+		if it.Name != "" {
+			names = append(names, it.Name)
+		}
+	}
+	return names, nil
+}
+
 // CreateIssue creates a new issue in Jira
 func (jc *JiraClient) CreateIssue(projectKey, issueType, summary, description string, additionalFields map[string]interface{}) (map[string]interface{}, error) {
 	// Build the request body
